@@ -1,0 +1,7 @@
+aiogram
+asyncpg
+python-dotenv
+py3xui
+qrcode[pil]
+requests
+aiohttp
