@@ -4,7 +4,7 @@ import qrcode
 import os
 from datetime import datetime, timedelta
 from py3xui import AsyncApi, Client
-from config import XUI_PANEL_URL, XUI_USERNAME, XUI_PASSWORD, INBOUND_ID, \
+from app.config import XUI_PANEL_URL, XUI_USERNAME, XUI_PASSWORD, INBOUND_ID, \
     DATA_LIMIT_GB, EXPIRY_TIME, XUI_EXTERNAL_IP, SERVER_PORT, QRCODE_DIR
 
 logger = logging.getLogger(__name__)

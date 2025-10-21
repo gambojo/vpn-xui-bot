@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 from aiogram import Bot
 from aiogram.types import Message
 import asyncio
@@ -182,7 +182,7 @@ class OnboardingService:
 
         try:
             # Проверяем, какие данные уже есть
-            from services.database import get_user
+            from app.services.database import get_user
             user = await get_user(user_id)
 
             missing_fields = []

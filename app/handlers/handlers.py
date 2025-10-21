@@ -6,14 +6,14 @@ from aiogram.types import Message, FSInputFile
 import logging
 import os
 
-from services.registration_service import registration_manager
-from handlers.action_service import action_service  # ⚠️ ИСПРАВЛЕНО
-from handlers.keyboards import (  # ⚠️ ИСПРАВЛЕНО
+from app.services import registration_manager
+from app.handlers.action_service import action_service  # ⚠️ ИСПРАВЛЕНО
+from app.handlers.keyboards import (  # ⚠️ ИСПРАВЛЕНО
     get_main_menu, get_profile_menu, get_subs_menu, get_instructions_menu,
     get_payment_methods, get_back_only, get_payment_check
 )
-from config import (
-    WELCOME_MESSAGE, ABOUT_MESSAGE, INSTRUCTIONS_MESSAGE, PROFILE_MESSAGE, SUBS_MESSAGE,
+from app.config import (
+    WELCOME_MESSAGE, ABOUT_MESSAGE, INSTRUCTIONS_MESSAGE, SUBS_MESSAGE,
     COLLECT_EMAIL, COLLECT_PHONE, COLLECT_FIRST_NAME, COLLECT_LAST_NAME, COLLECT_PATRONYMIC
 )
 
@@ -47,7 +47,7 @@ async def cmd_start(message: Message, state: FSMContext):
     username = message.from_user.username
 
     # Сохраняем базовые данные
-    from services.database import save_user
+    from app.services.database import save_user
     await save_user(telegram_id, username)
 
     # Проверяем, нужно ли собирать дополнительные данные
@@ -405,7 +405,7 @@ async def _process_registration_field(message: Message, state: FSMContext, field
 
     # Сохраняем в базу
     telegram_id = message.from_user.id
-    from services.database import save_user
+    from app.services.database import save_user
     await save_user(telegram_id, **{field_name: value})
 
     # Переходим к следующему полю или завершаем регистрацию

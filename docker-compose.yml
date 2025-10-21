@@ -2,32 +2,28 @@
 version: '3.8'
 
 services:
-  # 🗄️ PostgreSQL база данных
   postgres:
     image: postgres:15
     container_name: vpn_bot_postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-xui_bot_db}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_USER: ${DB_USER:-xui_bot_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-xui_bot_password}
     ports:
-      - "5432:5432"
+      - "45432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+#      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - vpn_bot_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-xui_bot_user}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # 🤖 Telegram бот
   bot:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    build: .
     container_name: vpn_bot
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
@@ -35,12 +31,12 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-xui_bot_db}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_USER=${DB_USER:-xui_bot_user}
+      - DB_PASSWORD=${DB_PASSWORD:-xui_bot_password}
       # 3x-ui настройки
-      - XUI_PANEL_URL=${XUI_PANEL_URL}
-      - XUI_USERNAME=${XUI_USERNAME}
-      - XUI_PASSWORD=${XUI_PASSWORD}
+      - XUI_PANEL_URL=${XUI_PANEL_URL:-http://localhost:2053}
+      - XUI_USERNAME=${XUI_USERNAME:-admin}
+      - XUI_PASSWORD=${XUI_PASSWORD:-admin}
       - INBOUND_ID=${INBOUND_ID:-1}
       - XUI_EXTERNAL_IP=${XUI_EXTERNAL_IP}
       # Дополнительные настройки
@@ -55,6 +51,7 @@ services:
       - vpn_bot_network
     volumes:
       - qrcodes_volume:/app/qrcodes
+      - .env:/app/.env
     # Для разработки - монтируем код
     # volumes:
     #   - ../handlers:/app/handlers
@@ -62,12 +59,11 @@ services:
     #   - ../main.py:/app/main.py
     #   - ../config.py:/app/config.py
 
-  # 📊 Adminer для управления БД (опционально)
   adminer:
     image: adminer
     container_name: vpn_bot_adminer
     ports:
-      - "8080:8080"
+      - "48080:8080"
     networks:
       - vpn_bot_network
     depends_on:
