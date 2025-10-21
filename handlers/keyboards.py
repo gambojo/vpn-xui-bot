@@ -64,6 +64,7 @@ def get_subs_menu():
             [KeyboardButton(text="🛒 Получить подписку")],
             [KeyboardButton(text="🔄 Продлить подписку")],
             [KeyboardButton(text="📊 Узнать статус")],
+            [KeyboardButton(text="📱 Получить подключение")],
             [KeyboardButton(text="🏠 Главное меню")]
         ],
         resize_keyboard=True

@@ -1,13 +1,13 @@
 import logging
 from typing import Dict
 
-from services.database import save_user, get_user, update_user_balance
+from services.database import save_user, get_user, update_user_balance, get_trial_status, mark_trial_used
 from services.vpn_service import create_vpn_account, get_vpn_status, renew_vpn_account
 from services.payment import create_payment, check_payment, is_payment_enabled, get_available_providers, \
     create_payment_config, \
     create_payment_item
 from services.onboarding import onboarding_service
-from config import PAYMENT_AMOUNT, EXPIRY_TIME
+from config import PAYMENT_AMOUNT, EXPIRY_TIME, TRIAL_ENABLED, TRIAL_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,35 @@ class ActionService:
         4. Начисление баллов
         """
         try:
+            # Fроверка существования подписки
+            existing_vpn = await get_vpn_status(telegram_id)
+            if existing_vpn and existing_vpn.get("success"):
+                # Получаем данные подключения для существующего VPN
+                result = await create_vpn_account(telegram_id)  # Эта функция возвращает connection_string
+                if result and result.get("success"):
+                    return {
+                        "type": "success",
+                        "message": (
+                            f"✅ <b>VPN уже активирован!</b>\n"
+                            f"• Состояние: ✅ Активна\n"
+                            f"• Осталось дней: {existing_vpn['expiry_days']}\n"
+                            f"• ID: {telegram_id}\n"
+                            f"• Подключение: <code>{result['connection_string']}</code>"
+                        ),
+                        "qrcode_path": result.get('qrcode_path')
+                    }
+                else:
+                    return {
+                        "type": "success",
+                        "message": (
+                            f"✅ <b>VPN уже активирован!</b>\n"
+                            f"• Состояние: ✅ Активна\n"
+                            f"• Осталось дней: {existing_vpn['expiry_days']}\n"
+                            f"• ID: {telegram_id}\n"
+                            f"• Для получения данных подключения используйте «📱 Получить подключение»"
+                        )
+                    }
+
             # Сохраняем пользователя если нужно
             if username:
                 await save_user(telegram_id, username)
@@ -87,6 +116,94 @@ class ActionService:
                 "message": "❌ Ошибка при создании VPN сервиса"
             }
 
+
+    async def handle_free_trial(self, telegram_id: int, username: str = None) -> Dict:
+        """
+        📍 ТОЧКА ВХОДА: Бесплатный trial период
+        ВЫЗЫВАЕТСЯ ИЗ: handlers.handle_free_period()
+        ВХОД: telegram_id, username
+        ВЫХОД: {type: str, message: str}
+        """
+        try:
+            # Проверяем включен ли trial
+            if not TRIAL_ENABLED:
+                return {
+                    "type": "error",
+                    "message": "❌ Бесплатный период временно недоступен"
+                }
+
+            # Проверяем использовал ли уже trial
+            trial_used = await get_trial_status(telegram_id)
+            if trial_used:
+                return {
+                    "type": "error",
+                    "message": (
+                        "❌ Вы уже использовали бесплатный период\n"
+                        "💳 Для продолжения использования приобретите подписку"
+                    )
+                }
+
+            # Проверяем существование подписки
+            existing_vpn = await get_vpn_status(telegram_id)
+            if existing_vpn and existing_vpn.get("success"):
+                return {
+                    "type": "success",
+                    "message": (
+                        f"✅ <b>VPN уже активирован!</b>\n"
+                        f"• Состояние: ✅ Активна\n"
+                        f"• Осталось дней: {existing_vpn['expiry_days']}\n"
+                        f"• ID: {telegram_id}\n"
+                        f"• Для получения данных подключения используйте «📱 Получить подключение»"
+                    )
+                }
+
+            # Сохраняем пользователя если нужно
+            if username:
+                await save_user(telegram_id, username)
+
+            # 🔄 ЗАПУСК ONBOARDING ПЕРЕД СОЗДАНИЕМ VPN
+            onboarding_result = await onboarding_service.execute_steps(telegram_id)
+            if not onboarding_result["completed"]:
+                return {
+                    "type": "onboarding_required",
+                    "message": onboarding_result["message"],
+                    "next_action": onboarding_result["next_action"]
+                }
+
+            # Создаем VPN на trial период
+            result = await create_vpn_account(telegram_id, is_trial=True)
+            if result and result.get("success"):
+                # Отмечаем trial как использованный
+                await mark_trial_used(telegram_id)
+
+                # Начисляем баллы за активацию trial
+                await update_user_balance(telegram_id, 5)
+
+                return {
+                    "type": "success",
+                    "message": (
+                        f"🎁 <b>Бесплатный период активирован!</b>\n"
+                        f"• Срок: {TRIAL_DAYS} дней\n"
+                        f"• ID: {telegram_id}\n"
+                        f"• Подключение: <code>{result['connection_string']}</code>\n\n"
+                        f"💡 После окончания trial периода вы можете продлить подписку"
+                    ),
+                    "qrcode_buffer": result.get('qrcode_buffer')
+                }
+            else:
+                return {
+                    "type": "error",
+                    "message": "❌ Не удалось активировать бесплатный период"
+                }
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка активации trial: {e}")
+            return {
+                "type": "error",
+                "message": "❌ Ошибка при активации бесплатного периода"
+            }
+
+
     async def handle_renew_vpn(self, telegram_id: int) -> Dict:
         """
         📍 ТОЧКА ВХОДА: Продление VPN услуги
@@ -114,14 +231,42 @@ class ActionService:
                 # Начисляем баллы за продление
                 await update_user_balance(telegram_id, 3)
 
-                return {
-                    "type": "success",
-                    "message": (
-                        f"✅ <b>VPN продлен!</b>\n"
-                        f"• Новый срок: {EXPIRY_TIME} дней\n"
-                        f"• ID: {telegram_id}"
-                    )
-                }
+                # Проверяем, есть ли данные подключения в результате
+                if result.get("connection_string"):
+                    return {
+                        "type": "success",
+                        "message": (
+                            f"✅ <b>VPN продлен!</b>\n"
+                            f"• Новый срок: {EXPIRY_TIME} дней\n"
+                            f"• ID: {telegram_id}\n"
+                            f"• Подключение: <code>{result['connection_string']}</code>"
+                        ),
+                        "qrcode_path": result.get('qrcode_path')
+                    }
+                else:
+                    # Если connection_string нет, получаем данные подключения отдельно
+                    connection_result = await create_vpn_account(telegram_id)
+                    if connection_result and connection_result.get("success"):
+                        return {
+                            "type": "success",
+                            "message": (
+                                f"✅ <b>VPN продлен!</b>\n"
+                                f"• Новый срок: {EXPIRY_TIME} дней\n"
+                                f"• ID: {telegram_id}\n"
+                                f"• Подключение: <code>{connection_result['connection_string']}</code>"
+                            ),
+                            "qrcode_path": connection_result.get('qrcode_path')
+                        }
+                    else:
+                        return {
+                            "type": "success",
+                            "message": (
+                                f"✅ <b>VPN продлен!</b>\n"
+                                f"• Новый срок: {EXPIRY_TIME} дней\n"
+                                f"• ID: {telegram_id}\n"
+                                f"• Для получения данных подключения используйте «📱 Получить подключение»"
+                            )
+                        }
             else:
                 return {
                     "type": "error",
@@ -136,6 +281,53 @@ class ActionService:
             return {
                 "type": "error",
                 "message": "❌ Ошибка при продлении VPN"
+            }
+
+    async def handle_get_connection(self, telegram_id: int) -> Dict:
+        """
+        📍 ТОЧКА ВХОДА: Получить данные подключения
+        ВЫЗЫВАЕТСЯ ИЗ: handlers.handle_get_connection()
+        ВХОД: telegram_id
+        ВЫХОД: {type: str, message: str, qrcode_path: str}
+        """
+        try:
+            # Проверяем существование VPN
+            existing_vpn = await get_vpn_status(telegram_id)
+            if not existing_vpn or not existing_vpn.get("success"):
+                return {
+                    "type": "error",
+                    "message": (
+                        "❌ <b>VPN не активирован</b>\n"
+                        "• Сначала приобретите подписку через «🛒 Получить подписку»"
+                    )
+                }
+
+            # Получаем данные подключения
+            result = await create_vpn_account(telegram_id)
+            if result and result.get("success"):
+                return {
+                    "type": "success",
+                    "message": (
+                        f"📱 <b>Данные для подключения</b>\n"
+                        f"• ID: {telegram_id}\n"
+                        f"• Состояние: ✅ Активна\n"
+                        f"• Осталось дней: {existing_vpn['expiry_days']}\n\n"
+                        f"🔗 <b>Подключение:</b>\n"
+                        f"<code>{result['connection_string']}</code>"
+                    ),
+                    "qrcode_path": result.get('qrcode_path')
+                }
+            else:
+                return {
+                    "type": "error",
+                    "message": "❌ Не удалось получить данные подключения"
+                }
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка получения подключения: {e}")
+            return {
+                "type": "error",
+                "message": "❌ Ошибка при получении данных подключения"
             }
 
     async def handle_vpn_status(self, telegram_id: int) -> Dict:

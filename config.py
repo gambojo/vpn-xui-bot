@@ -19,10 +19,13 @@ DATA_LIMIT_GB = int(os.getenv('DATA_LIMIT_GB', '0'))
 EXPIRY_TIME = int(os.getenv('EXPIRY_TIME', '30'))
 XUI_EXTERNAL_IP = os.getenv('XUI_EXTERNAL_IP')
 SERVER_PORT = os.getenv('SERVER_PORT', '443')
-QRCODE_DIR = os.getenv('QRCODE_DIR', 'qrcodes')
 
 # === НАСТРОЙКИ TELEGRAM ===
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+
+# === TRIAL СИСТЕМА ===
+TRIAL_ENABLED = os.getenv('TRIAL_ENABLED', 'False').lower() == 'true'
+TRIAL_DAYS = int(os.getenv('TRIAL_DAYS', '3'))
 
 # === ПЕРЕМЫЧКИ РЕГИСТРАЦИИ ===
 COLLECT_EMAIL = os.getenv('COLLECT_EMAIL', 'False').lower() == 'true'

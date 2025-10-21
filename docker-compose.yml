@@ -14,7 +14,7 @@ services:
     networks:
       - vpn_bot_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U xui_bot_user"]
+      test: ["CMD-SHELL", "pg_isready -d xui_bot_db -U xui_bot_user"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,6 +43,8 @@ services:
       COLLECT_LAST_NAME: false
       COLLECT_PATRONYMIC: false
       PAYMENT_ENABLED: false
+      TRIAL_ENABLED: true
+      TRIAL_DAYS: 3
     depends_on:
       postgres:
         condition: service_healthy

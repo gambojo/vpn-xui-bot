@@ -34,6 +34,7 @@ async def init_database():
                 last_name VARCHAR(100),          -- опционально
                 patronymic VARCHAR(100),         -- опционально
                 balance INTEGER DEFAULT 0,       -- универсальные баллы
+                trial_used BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -55,12 +56,6 @@ async def init_database():
 async def save_user(telegram_id: int, username: str = None, display_name: str = None, **fields):
     """
     УНИВЕРСАЛЬНОЕ сохранение пользователя для любого проекта
-
-    Args:
-        telegram_id: обязательный ID Telegram
-        username: опционально (@username)
-        display_name: опционально (имя из профиля)
-        **fields: любые дополнительные поля (email, phone_number, first_name, etc.)
     """
     try:
         conn = await get_connection()
@@ -74,11 +69,15 @@ async def save_user(telegram_id: int, username: str = None, display_name: str = 
             'first_name': fields.get('first_name'),
             'last_name': fields.get('last_name'),
             'patronymic': fields.get('patronymic'),
-            'metadata': fields.get('metadata')  # любые JSON данные
+            'trial_used': fields.get('trial_used'),  # ← ДОБАВИТЬ ЭТО
+            'metadata': fields.get('metadata')
         }
 
-        # Фильтруем только переданные поля
-        provided_fields = {k: v for k, v in all_fields.items() if v is not None}
+        # Фильтруем только переданные поля (кроме None, но trial_used может быть False)
+        provided_fields = {}
+        for k, v in all_fields.items():
+            if v is not None or k == 'trial_used':  # trial_used может быть False
+                provided_fields[k] = v
 
         if not provided_fields:
             # Минимальное сохранение - только telegram_id
@@ -150,6 +149,35 @@ async def update_user_balance(telegram_id: int, amount: int):
         logger.error(f"❌ Ошибка обновления баланса: {e}")
         return False
 
+
+async def get_trial_status(telegram_id: int) -> bool:
+    """Проверяет, использовал ли пользователь trial"""
+    try:
+        conn = await get_connection()
+        trial_used = await conn.fetchval(
+            'SELECT trial_used FROM users WHERE telegram_id = $1',
+            telegram_id
+        )
+        await conn.close()
+        return trial_used if trial_used is not None else False
+    except Exception as e:
+        logger.error(f"❌ Ошибка проверки trial статуса: {e}")
+        return False
+
+async def mark_trial_used(telegram_id: int):
+    """Отмечает что пользователь использовал trial"""
+    try:
+        conn = await get_connection()
+        await conn.execute(
+            'UPDATE users SET trial_used = TRUE, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = $1',
+            telegram_id
+        )
+        await conn.close()
+        logger.info(f"✅ Trial отмечен как использованный для пользователя {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка отметки trial: {e}")
+        return False
 
 async def update_user_metadata(telegram_id: int, key: str, value):
     """

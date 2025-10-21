@@ -1,9 +1,8 @@
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message, BufferedInputFile
 import logging
-import os
 
 from services.registration_service import registration_manager, RegistrationStates
 from handlers.action_service import action_service
@@ -128,9 +127,10 @@ async def handle_get_vpn(message: Message, state: FSMContext):
     else:
         await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
 
-        # Отправляем QR-код если есть
-        if result.get("qrcode_path") and os.path.exists(result["qrcode_path"]):
-            photo = FSInputFile(result["qrcode_path"])
+        # Отправляем QR-код если есть (из памяти)
+        if result.get("qrcode_buffer"):
+            # Создаем InputFile из BytesIO
+            photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
             await message.answer_photo(photo, caption="📱 QR-код для подключения")
 
 
@@ -139,14 +139,41 @@ async def handle_free_period(message: Message):
     """
     📍 ТОЧКА ВХОДА: Кнопка "🎁 Воспользоваться бесплатным периодом"
     ЗАПУСК: Нажатие кнопки бесплатного периода
-    РЕЗУЛЬТАТ: Активация VPN без оплаты (если доступно)
+    РЕЗУЛЬТАТ: Активация trial периода
     """
     telegram_id = message.from_user.id
     username = message.from_user.username
 
     # ВСЯ логика в ActionService
-    result = await action_service.handle_get_vpn(telegram_id, username)
+    result = await action_service.handle_free_trial(telegram_id, username)
+
+    # Показываем результат пользователю
     await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
+
+    # Отправляем QR-код если есть (из памяти)
+    if result.get("qrcode_buffer"):
+        photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+        await message.answer_photo(photo, caption="📱 QR-код для подключения")
+
+
+@router.message(F.text == "📱 Получить подключение")
+async def handle_get_connection(message: Message):
+    """
+    📍 ТОЧКА ВХОДА: Кнопка "📱 Получить подключение"
+    ЗАПУСК: Нажатие кнопки получения данных подключения
+    РЕЗУЛЬТАТ: Данные для подключения к VPN
+    """
+    telegram_id = message.from_user.id
+
+    # ВСЯ логика в ActionService
+    result = await action_service.handle_get_connection(telegram_id)
+
+    await message.answer(result["message"], reply_markup=get_subs_menu(), parse_mode="HTML")
+
+    # Отправляем QR-код если есть (из памяти)
+    if result.get("qrcode_buffer"):
+        photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+        await message.answer_photo(photo, caption="📱 QR-код для подключения")
 
 
 @router.message(F.text == "📊 Узнать статус")

@@ -1,11 +1,11 @@
 import logging
 import uuid
 import qrcode
-import os
+import io
 from datetime import datetime, timedelta
 from py3xui import AsyncApi, Client
 from config import XUI_PANEL_URL, XUI_USERNAME, XUI_PASSWORD, INBOUND_ID, \
-    DATA_LIMIT_GB, EXPIRY_TIME, XUI_EXTERNAL_IP, SERVER_PORT, QRCODE_DIR
+    DATA_LIMIT_GB, EXPIRY_TIME, XUI_EXTERNAL_IP, SERVER_PORT, TRIAL_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +51,30 @@ def get_connection_string(email, inbound, client_uuid):
 
 
 def create_qrcode(connection_string, email):
-    """Просто создает QR-код"""
-    os.makedirs(QRCODE_DIR, exist_ok=True)
-    qrcode_path = os.path.join(QRCODE_DIR, f"{email}.png")
-    img = qrcode.make(connection_string)
-    img.save(qrcode_path)
-    return qrcode_path
+    """Создает QR-код в памяти (без сохранения файла)"""
+    try:
+        # Создаем QR-код в памяти
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(connection_string)
+        qr.make(fit=True)
+
+        # Создаем изображение в памяти
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # Сохраняем в BytesIO (память)
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+
+        return img_buffer
+    except Exception as e:
+        logger.error(f"❌ Ошибка создания QR-кода: {e}")
+        return None
 
 
 # 🔄 АСИНХРОННЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С API
@@ -157,11 +175,18 @@ async def update_client(api, email, expiry_time, total_gb):
 
 
 # ⭐⭐ ТОЧКИ ВХОДА ⭐⭐
-async def create_vpn_account(telegram_id: int):
+async def create_vpn_account(telegram_id: int, is_trial: bool = False):
     """ТОЧКА ВХОДА - создать VPN аккаунт"""
     try:
         email = str(telegram_id)
-        expiry_time = get_expiry_time(EXPIRY_TIME)
+
+        # Определяем срок действия в зависимости от trial
+        if is_trial:
+            expiry_days = TRIAL_DAYS
+        else:
+            expiry_days = EXPIRY_TIME
+
+        expiry_time = get_expiry_time(expiry_days)
         total_gb = get_total_gb(DATA_LIMIT_GB)
 
         # Подключаемся к API
@@ -185,15 +210,15 @@ async def create_vpn_account(telegram_id: int):
         client_in_inbound = await get_client_from_inbound(inbound, email)
 
         connection_string = get_connection_string(email, inbound, client_in_inbound.id)
-        qrcode_path = create_qrcode(connection_string, email)
+        qrcode_buffer = create_qrcode(connection_string, email)
 
         return {
             "success": True,
             "client_id": client_in_inbound.id,
             "lease_is_active": True,
-            "qrcode_path": qrcode_path,
+            "qrcode_buffer": qrcode_buffer,
             "expiry_time": expiry_time,
-            "expiry_days": EXPIRY_TIME,
+            "expiry_days": expiry_days,
             "connection_string": connection_string
         }
 
@@ -261,13 +286,13 @@ async def renew_vpn_account(telegram_id: int):
         client_in_inbound = await get_client_from_inbound(inbound, email)
 
         connection_string = get_connection_string(email, inbound, client_in_inbound.id)
-        qrcode_path = create_qrcode(connection_string, email)
+        qrcode_buffer = create_qrcode(connection_string, email)
 
         return {
             "success": True,
             "client_id": updated_client.id,
             "lease_is_active": updated_client.enable,
-            "qrcode_path": qrcode_path,
+            "qrcode_buffer": qrcode_buffer,
             "expiry_time": expiry_time,
             "expiry_days": EXPIRY_TIME,
             "connection_string": connection_string
