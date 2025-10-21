@@ -1,13 +1,13 @@
 import logging
 from typing import Dict
 
-from app.services.database import save_user, get_user, update_user_balance
-from app.services.vpn_service import create_vpn_account, get_vpn_status, renew_vpn_account
-from app.services.payment import create_payment, check_payment, is_payment_enabled, get_available_providers, \
+from services.database import save_user, get_user, update_user_balance
+from services.vpn_service import create_vpn_account, get_vpn_status, renew_vpn_account
+from services.payment import create_payment, check_payment, is_payment_enabled, get_available_providers, \
     create_payment_config, \
     create_payment_item
-from app.services.onboarding import onboarding_service  # ⚠️ НОВЫЙ ИМПОРТ
-from app.config import PAYMENT_AMOUNT, EXPIRY_TIME
+from services.onboarding import onboarding_service
+from config import PAYMENT_AMOUNT, EXPIRY_TIME
 
 logger = logging.getLogger(__name__)
 

@@ -182,7 +182,7 @@ class OnboardingService:
 
         try:
             # Проверяем, какие данные уже есть
-            from app.services.database import get_user
+            from services.database import get_user
             user = await get_user(user_id)
 
             missing_fields = []
