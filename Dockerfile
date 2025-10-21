@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 WORKDIR /app
-COPY app/* /app/
+COPY app/* .
 RUN mkdir -p data && \
     mkdir -p qrcodes && \
     groupadd -r bot && \

@@ -1,19 +1,15 @@
-# docker/docker-compose.yml
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
     container_name: vpn_bot_postgres
     environment:
-      POSTGRES_DB: ${DB_NAME:-xui_bot_db}
-      POSTGRES_USER: ${DB_USER:-xui_bot_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-xui_bot_password}
+      POSTGRES_DB: xui_bot_db
+      POSTGRES_USER: xui_bot_user
+      POSTGRES_PASSWORD: xui_bot_password
     ports:
-      - "45432:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-#      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - vpn_bot_network
     healthcheck:
@@ -25,26 +21,27 @@ services:
   bot:
     build: .
     container_name: vpn_bot
-#    env_file:
-#      - .env
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      # База данных
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-xui_bot_db}
-      - DB_USER=${DB_USER:-xui_bot_user}
-      - DB_PASSWORD=${DB_PASSWORD:-xui_bot_password}
-      # 3x-ui настройки
-      - XUI_PANEL_URL=${XUI_PANEL_URL:-http://localhost:2053}
-      - XUI_USERNAME=${XUI_USERNAME:-admin}
-      - XUI_PASSWORD=${XUI_PASSWORD:-admin}
-      - INBOUND_ID=${INBOUND_ID:-1}
-      - XUI_EXTERNAL_IP=${XUI_EXTERNAL_IP}
-      # Дополнительные настройки
-      - COLLECT_EMAIL=${COLLECT_EMAIL:-false}
-      - COLLECT_PHONE=${COLLECT_PHONE:-false}
-      - PAYMENT_ENABLED=${PAYMENT_ENABLED:-false}
+      BOT_TOKEN: "8266665197:AAH6lfkxr1p-TLbhe3NR_9yErnh5necNW1g"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: xui_bot_db
+      DB_USER: xui_bot_user
+      DB_PASSWORD: xui_bot_password
+      XUI_PANEL_URL: http://localhost:2053
+      XUI_USERNAME: admin
+      XUI_PASSWORD: admin
+      INBOUND_ID: 1
+      XUI_EXTERNAL_IP: 193.32.177.130
+      DATA_LIMIT_GB: 0
+      EXPIRY_TIME: 30
+      SERVER_PORT: 443
+      COLLECT_EMAIL: false
+      COLLECT_PHONE: false
+      COLLECT_FIRST_NAME: false
+      COLLECT_LAST_NAME: false
+      COLLECT_PATRONYMIC: false
+      PAYMENT_ENABLED: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,19 +50,12 @@ services:
       - vpn_bot_network
     volumes:
       - qrcodes_volume:/app/qrcodes
-      - .env:/app/.env
-    # Для разработки - монтируем код
-    # volumes:
-    #   - ../handlers:/app/handlers
-    #   - ../services:/app/services
-    #   - ../main.py:/app/main.py
-    #   - ../config.py:/app/config.py
 
   adminer:
     image: adminer
     container_name: vpn_bot_adminer
     ports:
-      - "48080:8080"
+      - "8080:8080"
     networks:
       - vpn_bot_network
     depends_on:
