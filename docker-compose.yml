@@ -51,8 +51,6 @@ services:
     restart: unless-stopped
     networks:
       - vpn_bot_network
-    volumes:
-      - qrcodes_volume:/app/qrcodes
 
   adminer:
     image: adminer
@@ -66,8 +64,6 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  qrcodes_volume:
     driver: local
 
 networks:
