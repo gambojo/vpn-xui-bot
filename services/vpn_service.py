@@ -135,16 +135,23 @@ async def add_client(api, email, inbound_id, expiry_time, total_gb):
 async def get_client_from_inbound(inbound, email):
     """Поиск клиента в инбаунде по email"""
     try:
+        if not inbound or not hasattr(inbound, 'settings') or not inbound.settings.clients:
+            logger.error("❌ Инбаунд не содержит клиентов")
+            return None
+
         client = None
         for c in inbound.settings.clients:
-            if c.email == email:
+            if hasattr(c, 'email') and c.email == email:
                 client = c
                 break
+
         if client:
-            logger.info(f"Найден клиент с ID: {client.id}")
+            logger.info(f"✅ Найден клиент с ID: {client.id}")
+            return client
         else:
-            raise ValueError(f"Клиент с email {email} не найден в инбаунде")
-        return client
+            logger.warning(f"⚠️ Клиент с email {email} не найден в инбаунде")
+            return None
+
     except Exception as e:
         logger.error(f"❌ Ошибка получения клиента из инбаунда: {e}")
         return None
@@ -197,13 +204,18 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
 
         # Проверяем существование клиента
         existing_client = await get_client_by_email(api, email)
-        if existing_client:
-            logger.info(f"⚠️ Клиент {email} уже существует")
 
-            # Если клиент существует, получаем его данные подключения
-            inbound = await get_inbound(api, INBOUND_ID)
-            client_in_inbound = await get_client_from_inbound(inbound, email)
+        # Получаем inbound для данных подключения
+        inbound = await get_inbound(api, INBOUND_ID)
+        if not inbound:
+            return None
 
+        client_in_inbound = await get_client_from_inbound(inbound, email)
+
+        if existing_client and client_in_inbound:
+            logger.info(f"⚠️ Клиент {email} уже существует - возвращаем данные подключения")
+
+            # Генерируем connection_string для существующего клиента
             connection_string = get_connection_string(email, inbound, client_in_inbound.id)
             qrcode_buffer = create_qrcode(connection_string, email)
 
@@ -220,15 +232,12 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
                 "connection_string": connection_string
             }
 
-        # Создаем клиента (если не существует)
+        # Если клиента нет - создаем нового
         client = await add_client(api, email, INBOUND_ID, expiry_time, total_gb)
         if not client:
             return None
 
         # Получаем данные для подключения
-        inbound = await get_inbound(api, INBOUND_ID)
-        client_in_inbound = await get_client_from_inbound(inbound, email)
-
         connection_string = get_connection_string(email, inbound, client_in_inbound.id)
         qrcode_buffer = create_qrcode(connection_string, email)
 
@@ -248,7 +257,6 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
     except Exception as e:
         logger.error(f"❌ Ошибка создания VPN аккаунта: {e}")
         return None
-
 
 async def get_vpn_status(telegram_id: int):
     """ТОЧКА ВХОДА - получить статус VPN"""

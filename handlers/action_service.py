@@ -27,46 +27,8 @@ class ActionService:
     async def handle_get_vpn(self, telegram_id: int, username: str = None) -> Dict:
         """
         📍 ТОЧКА ВХОДА: Получение VPN услуги
-        ВЫЗЫВАЕТСЯ ИЗ: handlers.handle_get_vpn(), handlers.handle_free_period()
-        ВХОД: telegram_id, username (опционально)
-        ВЫХОД: {type: str, message: str, ...}
-
-        ЛОГИКА:
-        1. Сохранение пользователя
-        2. Запуск onboarding (если настроен)
-        3. Проверка оплаты или сразу создание VPN
-        4. Начисление баллов
         """
         try:
-            # Fроверка существования подписки
-            existing_vpn = await get_vpn_status(telegram_id)
-            if existing_vpn and existing_vpn.get("success"):
-                # Получаем данные подключения для существующего VPN
-                result = await create_vpn_account(telegram_id)  # Эта функция возвращает connection_string
-                if result and result.get("success"):
-                    return {
-                        "type": "success",
-                        "message": (
-                            f"✅ <b>VPN уже активирован!</b>\n"
-                            f"• Состояние: ✅ Активна\n"
-                            f"• Осталось дней: {existing_vpn['expiry_days']}\n"
-                            f"• ID: {telegram_id}\n"
-                            f"• Подключение: <code>{result['connection_string']}</code>"
-                        ),
-                        "qrcode_path": result.get('qrcode_path')
-                    }
-                else:
-                    return {
-                        "type": "success",
-                        "message": (
-                            f"✅ <b>VPN уже активирован!</b>\n"
-                            f"• Состояние: ✅ Активна\n"
-                            f"• Осталось дней: {existing_vpn['expiry_days']}\n"
-                            f"• ID: {telegram_id}\n"
-                            f"• Для получения данных подключения используйте «📱 Получить подключение»"
-                        )
-                    }
-
             # Сохраняем пользователя если нужно
             if username:
                 await save_user(telegram_id, username)
@@ -98,7 +60,7 @@ class ActionService:
                     "type": "success",
                     "message": (
                         f"✅ <b>VPN активирован!</b>\n"
-                        f"• Срок: {EXPIRY_TIME} дней\n"
+                        f"• Срок: {result['expiry_days']} дней\n"
                         f"• ID: {telegram_id}\n"
                         f"• Подключение: <code>{result['connection_string']}</code>"
                     ),
@@ -107,9 +69,8 @@ class ActionService:
             else:
                 return {
                     "type": "error",
-                    "message": "❌ Не удалось создать VPN. Возможно, он уже существует."
+                    "message": "❌ Не удалось создать VPN. Попробуйте позже."
                 }
-
 
         except Exception as e:
             logger.error(f"❌ Ошибка создания VPN: {e}")
@@ -121,9 +82,6 @@ class ActionService:
     async def handle_free_trial(self, telegram_id: int, username: str = None) -> Dict:
         """
         📍 ТОЧКА ВХОДА: Бесплатный trial период
-        ВЫЗЫВАЕТСЯ ИЗ: handlers.handle_free_period()
-        ВХОД: telegram_id, username
-        ВЫХОД: {type: str, message: str}
         """
         try:
             # Проверяем включен ли trial
@@ -170,7 +128,7 @@ class ActionService:
                     "type": "success",
                     "message": (
                         f"🎁 <b>Бесплатный период активирован!</b>\n"
-                        f"• Срок: {TRIAL_DAYS} дней\n"
+                        f"• Срок: {result['expiry_days']} дней\n"
                         f"• ID: {telegram_id}\n"
                         f"• Подключение: <code>{result['connection_string']}</code>\n\n"
                         f"💡 После окончания trial периода вы можете продлить подписку"
@@ -180,7 +138,7 @@ class ActionService:
             else:
                 return {
                     "type": "error",
-                    "message": "❌ Не удалось активировать бесплатный период. Возможно, VPN уже активирован."
+                    "message": "❌ Не удалось активировать бесплатный период. VPN уже может быть активирован."
                 }
 
         except Exception as e:
