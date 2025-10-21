@@ -35,6 +35,7 @@ async def init_database():
                 patronymic VARCHAR(100),         -- опционально
                 balance INTEGER DEFAULT 0,       -- универсальные баллы
                 trial_used BOOLEAN DEFAULT FALSE,
+                connection_string TEXT,          -- 🔴 ДОБАВЛЯЕМ ЭТО ПОЛЕ
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -50,6 +51,7 @@ async def init_database():
     except Exception as e:
         logger.error(f"❌ Ошибка инициализации БД: {e}")
         return False
+
 
 async def save_connection_string(telegram_id: int, connection_string: str):
     """Сохраняет connection_string пользователя"""

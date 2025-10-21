@@ -139,10 +139,9 @@ class ActionService:
                 "message": "❌ Ошибка при продлении VPN"
             }
 
-
     async def handle_free_trial(self, telegram_id: int, username: str = None) -> Dict:
         """
-        📍 ТОЧКА ВХОДА: Бесплатный trial период - ИСПРАВЛЕННАЯ ВЕРСИЯ
+        📍 ТОЧКА ВХОДА: Бесплатный trial период - УЛУЧШЕННАЯ ВЕРСИЯ
         """
         try:
             # Проверяем включен ли trial
@@ -179,10 +178,10 @@ class ActionService:
             # Создаем VPN на trial период
             result = await create_vpn_account(telegram_id, is_trial=True)
 
-            # 🔴 ИСПРАВЛЕНИЕ: Правильно проверяем результат
-            logger.info(f"🔍 Результат создания trial VPN: {result}")
+            # 🔴 УЛУЧШЕНИЕ: Детальная проверка результата
+            logger.info(f"🔍 Детальный результат создания trial VPN: {result}")
 
-            if result is not None and result.get("success"):
+            if result and result.get("success"):
                 # Отмечаем trial как использованный
                 await mark_trial_used(telegram_id)
 
@@ -201,12 +200,8 @@ class ActionService:
                     "qrcode_buffer": result.get('qrcode_buffer')
                 }
             else:
-                # 🔴 ИСПРАВЛЕНИЕ: Более информативное сообщение об ошибке
-                error_detail = "Неизвестная ошибка"
-                if result is None:
-                    error_detail = "VPN сервер недоступен"
-                elif not result.get("success"):
-                    error_detail = result.get("error", "Ошибка создания VPN")
+                # 🔴 УЛУЧШЕНИЕ: Более информативное сообщение об ошибке
+                error_detail = result.get("error", "Неизвестная ошибка") if result else "VPN сервер недоступен"
 
                 logger.error(f"❌ Ошибка создания trial: {error_detail}")
                 return {

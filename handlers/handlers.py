@@ -128,7 +128,7 @@ async def handle_free_period(message: Message):
 
 
 @router.message(F.text == "🚀 Приобрести подписку на VPN")
-@router.message(F.text == "🛒 Получить подписку")  # 🔴 ОБЪЕДИНЯЕМ ОБРАБОТЧИКИ
+@router.message(F.text == "🛒 Получить подписку")
 async def handle_get_vpn_unified(message: Message, state: FSMContext):
     """
     📍 ТОЧКА ВХОДА: Унифицированный обработчик получения VPN
@@ -140,7 +140,11 @@ async def handle_get_vpn_unified(message: Message, state: FSMContext):
     result = await action_service.handle_get_vpn(telegram_id, username)
 
     if result["type"] == "confirmation_required":
-        # 🔴 ДОБАВЛЯЕМ: Запрашиваем подтверждение
+        # 🔴 ИСПРАВЛЕНИЕ: Сохраняем данные о существующей подписке в состоянии
+        await state.update_data(
+            existing_days=result.get("existing_days", 0)
+        )
+
         await message.answer(result["message"], reply_markup=get_confirmation_keyboard(), parse_mode="HTML")
         await state.set_state("waiting_for_confirmation")
     elif result["type"] == "payment_required":
@@ -157,26 +161,57 @@ async def handle_get_vpn_unified(message: Message, state: FSMContext):
 @router.message(F.state == "waiting_for_confirmation")
 async def handle_confirmation(message: Message, state: FSMContext):
     """
-    📍 ТОЧКА ВХОДА: Подтверждение перезаписи подписки
+    📍 ТОЧКА ВХОДА: Подтверждение перезаписи подписки - ИСПРАВЛЕННАЯ ВЕРСИЯ
     """
     if message.text == "✅ Да, продолжить":
-        # Получаем данные из состояния
-        data = await state.get_data()
         telegram_id = message.from_user.id
         username = message.from_user.username
 
-        # Создаем новую подписку (перезаписываем старую)
-        result = await action_service.handle_get_vpn(telegram_id, username)
+        try:
+            # 🔴 ИСПРАВЛЕНИЕ: Создаем VPN БЕЗ проверки существующей подписки
+            # Получаем данные из состояния
+            data = await state.get_data()
+            existing_days = data.get("existing_days", 0)
 
-        if result["type"] == "payment_required":
-            await message.answer(result["message"], reply_markup=get_payment_methods())
-            await state.set_state("waiting_for_payment_method")
-            await state.update_data(action="create_vpn")
-        else:
-            await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
-            if result.get("qrcode_buffer"):
-                photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
-                await message.answer_photo(photo, caption="📱 QR-код для подключения")
+            logger.info(f"🔍 Подтверждение перезаписи для {telegram_id}, существовало дней: {existing_days}")
+
+            # 🔴 ИСПРАВЛЕНИЕ: Создаем VPN напрямую, минуя проверку существующей подписки
+            from services.vpn_service import create_vpn_account
+            result = await create_vpn_account(telegram_id)
+
+            if result and result.get("success"):
+                # Начисляем баллы за активацию
+                from services.database import update_user_balance
+                await update_user_balance(telegram_id, 5)
+
+                success_message = (
+                    f"✅ <b>Новая подписка активирована!</b>\n"
+                    f"• Старая подписка (осталось {existing_days} дней) перезаписана\n"
+                    f"• Новый срок: {result['expiry_days']} дней\n"
+                    f"• ID: {telegram_id}\n"
+                    f"• Подключение: <code>{result['connection_string']}</code>"
+                )
+
+                await message.answer(success_message, reply_markup=get_main_menu(), parse_mode="HTML")
+
+                # Отправляем QR-код если есть
+                if result.get("qrcode_buffer"):
+                    photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+                    await message.answer_photo(photo, caption="📱 QR-код для подключения")
+
+                await state.clear()
+
+            else:
+                error_message = "❌ Не удалось создать новую подписку. Попробуйте позже."
+                if result and result.get("error"):
+                    error_message = f"❌ Ошибка: {result['error']}"
+
+                await message.answer(error_message, reply_markup=get_main_menu())
+                await state.clear()
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при перезаписи подписки: {e}")
+            await message.answer("❌ Произошла ошибка при создании подписки.", reply_markup=get_main_menu())
             await state.clear()
 
     elif message.text == "❌ Нет, отменить":
