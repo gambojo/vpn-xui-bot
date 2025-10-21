@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     patronymic VARCHAR(100),
     balance INTEGER DEFAULT 0,
     trial_used BOOLEAN DEFAULT FALSE,
+    connection_string TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     metadata JSONB DEFAULT '{}'

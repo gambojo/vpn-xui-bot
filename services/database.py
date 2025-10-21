@@ -51,6 +51,34 @@ async def init_database():
         logger.error(f"❌ Ошибка инициализации БД: {e}")
         return False
 
+async def save_connection_string(telegram_id: int, connection_string: str):
+    """Сохраняет connection_string пользователя"""
+    try:
+        conn = await get_connection()
+        await conn.execute(
+            'UPDATE users SET connection_string = $1, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = $2',
+            connection_string, telegram_id
+        )
+        await conn.close()
+        logger.info(f"✅ Connection_string сохранен для пользователя {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка сохранения connection_string: {e}")
+        return False
+
+async def get_connection_string(telegram_id: int) -> str:
+    """Получает connection_string пользователя"""
+    try:
+        conn = await get_connection()
+        result = await conn.fetchval(
+            'SELECT connection_string FROM users WHERE telegram_id = $1',
+            telegram_id
+        )
+        await conn.close()
+        return result
+    except Exception as e:
+        logger.error(f"❌ Ошибка получения connection_string: {e}")
+        return None
 
 # 👤 ФУНКЦИИ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ
 async def save_user(telegram_id: int, username: str = None, display_name: str = None, **fields):

@@ -1,7 +1,8 @@
 import logging
 from typing import Dict
 
-from services.database import save_user, get_user, update_user_balance, get_trial_status, mark_trial_used
+from services.database import save_user, get_user, update_user_balance, \
+    get_trial_status, mark_trial_used, get_connection_string
 from services.vpn_service import create_vpn_account, get_vpn_status, renew_vpn_account
 from services.payment import create_payment, check_payment, is_payment_enabled, get_available_providers, \
     create_payment_config, \
@@ -288,7 +289,7 @@ class ActionService:
         📍 ТОЧКА ВХОДА: Получить данные подключения
         ВЫЗЫВАЕТСЯ ИЗ: handlers.handle_get_connection()
         ВХОД: telegram_id
-        ВЫХОД: {type: str, message: str, qrcode_path: str}
+        ВЫХОД: {type: str, message: str, qrcode_buffer: BytesIO}
         """
         try:
             # Проверяем существование VPN
@@ -302,26 +303,33 @@ class ActionService:
                     )
                 }
 
-            # Получаем данные подключения
-            result = await create_vpn_account(telegram_id)
-            if result and result.get("success"):
-                return {
-                    "type": "success",
-                    "message": (
-                        f"📱 <b>Данные для подключения</b>\n"
-                        f"• ID: {telegram_id}\n"
-                        f"• Состояние: ✅ Активна\n"
-                        f"• Осталось дней: {existing_vpn['expiry_days']}\n\n"
-                        f"🔗 <b>Подключение:</b>\n"
-                        f"<code>{result['connection_string']}</code>"
-                    ),
-                    "qrcode_path": result.get('qrcode_path')
-                }
-            else:
+            # Получаем connection_string из БД
+            connection_string = await get_connection_string(telegram_id)
+            if not connection_string:
                 return {
                     "type": "error",
-                    "message": "❌ Не удалось получить данные подключения"
+                    "message": (
+                        "❌ <b>Данные подключения не найдены</b>\n"
+                        "• Попробуйте обновить подписку через «🔄 Продлить подписку»"
+                    )
                 }
+
+            # Создаем QR-код
+            from services.vpn_service import create_qrcode
+            qrcode_buffer = create_qrcode(connection_string, str(telegram_id))
+
+            return {
+                "type": "success",
+                "message": (
+                    f"📱 <b>Данные для подключения</b>\n"
+                    f"• ID: {telegram_id}\n"
+                    f"• Состояние: ✅ Активна\n"
+                    f"• Осталось дней: {existing_vpn['expiry_days']}\n\n"
+                    f"🔗 <b>Подключение:</b>\n"
+                    f"<code>{connection_string}</code>"
+                ),
+                "qrcode_buffer": qrcode_buffer
+            }
 
         except Exception as e:
             logger.error(f"❌ Ошибка получения подключения: {e}")
@@ -329,6 +337,7 @@ class ActionService:
                 "type": "error",
                 "message": "❌ Ошибка при получении данных подключения"
             }
+
 
     async def handle_vpn_status(self, telegram_id: int) -> Dict:
         """

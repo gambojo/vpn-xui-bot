@@ -4,6 +4,7 @@ import qrcode
 import io
 from datetime import datetime, timedelta
 from py3xui import AsyncApi, Client
+from services.database import save_connection_string
 from config import XUI_PANEL_URL, XUI_USERNAME, XUI_PASSWORD, INBOUND_ID, \
     DATA_LIMIT_GB, EXPIRY_TIME, XUI_EXTERNAL_IP, SERVER_PORT, TRIAL_DAYS
 
@@ -198,9 +199,28 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
         existing_client = await get_client_by_email(api, email)
         if existing_client:
             logger.info(f"⚠️ Клиент {email} уже существует")
-            return None
 
-        # Создаем клиента
+            # Если клиент существует, получаем его данные подключения
+            inbound = await get_inbound(api, INBOUND_ID)
+            client_in_inbound = await get_client_from_inbound(inbound, email)
+
+            connection_string = get_connection_string(email, inbound, client_in_inbound.id)
+            qrcode_buffer = create_qrcode(connection_string, email)
+
+            # Сохраняем connection_string в БД
+            await save_connection_string(telegram_id, connection_string)
+
+            return {
+                "success": True,
+                "client_id": client_in_inbound.id,
+                "lease_is_active": True,
+                "qrcode_buffer": qrcode_buffer,
+                "expiry_time": expiry_time,
+                "expiry_days": expiry_days,
+                "connection_string": connection_string
+            }
+
+        # Создаем клиента (если не существует)
         client = await add_client(api, email, INBOUND_ID, expiry_time, total_gb)
         if not client:
             return None
@@ -211,6 +231,9 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
 
         connection_string = get_connection_string(email, inbound, client_in_inbound.id)
         qrcode_buffer = create_qrcode(connection_string, email)
+
+        # Сохраняем connection_string в БД
+        await save_connection_string(telegram_id, connection_string)
 
         return {
             "success": True,
@@ -288,6 +311,9 @@ async def renew_vpn_account(telegram_id: int):
         connection_string = get_connection_string(email, inbound, client_in_inbound.id)
         qrcode_buffer = create_qrcode(connection_string, email)
 
+        # Сохраняем connection_string в БД
+        await save_connection_string(telegram_id, connection_string)
+
         return {
             "success": True,
             "client_id": updated_client.id,
@@ -301,7 +327,6 @@ async def renew_vpn_account(telegram_id: int):
     except Exception as e:
         logger.error(f"❌ Ошибка продления VPN аккаунта: {e}")
         return None
-
 
 
 # Изолированное использование
