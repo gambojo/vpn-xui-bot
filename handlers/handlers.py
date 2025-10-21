@@ -1,7 +1,8 @@
 from aiogram import Router, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, BufferedInputFile
+from aiogram.fsm.state import State, StatesGroup
 import logging
 
 from services.registration_service import registration_manager, RegistrationStates
@@ -18,6 +19,9 @@ from config import (
 logger = logging.getLogger(__name__)
 router = Router()
 
+# 🔴 ДОБАВЛЯЕМ: Создаем класс состояний
+class ConfirmationStates(StatesGroup):
+    waiting_for_confirmation = State()
 
 # =============================================
 # 🏠 ОСНОВНЫЕ КОМАНДЫ MENU BUTTON
@@ -140,13 +144,14 @@ async def handle_get_vpn_unified(message: Message, state: FSMContext):
     result = await action_service.handle_get_vpn(telegram_id, username)
 
     if result["type"] == "confirmation_required":
-        # 🔴 ИСПРАВЛЕНИЕ: Сохраняем данные о существующей подписке в состоянии
+        # Сохраняем данные о существующей подписке в состоянии
         await state.update_data(
             existing_days=result.get("existing_days", 0)
         )
 
         await message.answer(result["message"], reply_markup=get_confirmation_keyboard(), parse_mode="HTML")
-        await state.set_state("waiting_for_confirmation")
+        # 🔴 ИСПРАВЛЕНИЕ: Используем правильное состояние
+        await state.set_state(ConfirmationStates.waiting_for_confirmation)
     elif result["type"] == "payment_required":
         await message.answer(result["message"], reply_markup=get_payment_methods())
         await state.set_state("waiting_for_payment_method")
@@ -158,7 +163,7 @@ async def handle_get_vpn_unified(message: Message, state: FSMContext):
             await message.answer_photo(photo, caption="📱 QR-код для подключения")
 
 
-@router.message(F.state == "waiting_for_confirmation")
+@router.message(StateFilter(ConfirmationStates.waiting_for_confirmation))
 async def handle_confirmation(message: Message, state: FSMContext):
     """
     📍 ТОЧКА ВХОДА: Подтверждение перезаписи подписки - ИСПРАВЛЕННАЯ ВЕРСИЯ
@@ -168,14 +173,13 @@ async def handle_confirmation(message: Message, state: FSMContext):
         username = message.from_user.username
 
         try:
-            # 🔴 ИСПРАВЛЕНИЕ: Создаем VPN БЕЗ проверки существующей подписки
             # Получаем данные из состояния
             data = await state.get_data()
             existing_days = data.get("existing_days", 0)
 
             logger.info(f"🔍 Подтверждение перезаписи для {telegram_id}, существовало дней: {existing_days}")
 
-            # 🔴 ИСПРАВЛЕНИЕ: Создаем VPN напрямую, минуя проверку существующей подписки
+            # Создаем VPN напрямую, минуя проверку существующей подписки
             from services.vpn_service import create_vpn_account
             result = await create_vpn_account(telegram_id)
 
