@@ -28,12 +28,18 @@ def get_total_gb(total_gb):
 
 
 def get_expiry_date(expire_ms):
-    """Просто вычисляет оставшиеся дни"""
+    """Просто вычисляет оставшиеся дни - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     if expire_ms == 0:
         return "Не ограничено"
     now_ms = int(datetime.now().timestamp() * 1000)
     delta_ms = expire_ms - now_ms
-    return max(delta_ms // (1000 * 60 * 60 * 24), 0)
+    days = delta_ms // (1000 * 60 * 60 * 24)
+
+    # 🔴 ИСПРАВЛЕНИЕ: Добавляем 1 день чтобы включить текущий день
+    if days >= 0:
+        return days + 1
+    else:
+        return 0  # Если срок истек
 
 
 def get_connection_string(email, inbound, client_uuid):
@@ -200,6 +206,7 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
         # Подключаемся к API
         api = await api_connect()
         if not api:
+            logger.error("❌ Не удалось подключиться к API")
             return None
 
         # Проверяем существование клиента
@@ -208,6 +215,7 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
         # Получаем inbound для данных подключения
         inbound = await get_inbound(api, INBOUND_ID)
         if not inbound:
+            logger.error("❌ Не удалось получить inbound")
             return None
 
         client_in_inbound = await get_client_from_inbound(inbound, email)
@@ -222,30 +230,41 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
             connection_string = get_connection_string(email, inbound, client_in_inbound.id)
             qrcode_buffer = create_qrcode(connection_string, email)
 
-            # Сохраняем connection_string в БД
+            # 🔴 ИСПРАВЛЕНИЕ: Сохраняем connection_string в БД (ВАЖНО!)
             await save_connection_string(telegram_id, connection_string)
+            logger.info(f"✅ Connection_string сохранен в БД для {telegram_id}")
 
             return {
                 "success": True,
                 "client_id": client_in_inbound.id,
                 "lease_is_active": True,
                 "qrcode_buffer": qrcode_buffer,
-                "expiry_time": existing_client.expiry_time,  # Используем существующее время
-                "expiry_days": existing_expiry_days,  # 🔴 ИСПРАВЛЕНИЕ: Правильные дни
+                "expiry_time": existing_client.expiry_time,
+                "expiry_days": existing_expiry_days,
                 "connection_string": connection_string
             }
 
         # Если клиента нет - создаем нового
         client = await add_client(api, email, INBOUND_ID, expiry_time, total_gb)
         if not client:
+            logger.error("❌ Не удалось создать клиента")
+            return None
+
+        # 🔴 ИСПРАВЛЕНИЕ: Получаем обновленный inbound с новым клиентом
+        inbound = await get_inbound(api, INBOUND_ID)
+        client_in_inbound = await get_client_from_inbound(inbound, email)
+
+        if not client_in_inbound:
+            logger.error("❌ Не удалось найти созданного клиента в инбаунде")
             return None
 
         # Получаем данные для подключения
         connection_string = get_connection_string(email, inbound, client_in_inbound.id)
         qrcode_buffer = create_qrcode(connection_string, email)
 
-        # Сохраняем connection_string в БД
+        # 🔴 ИСПРАВЛЕНИЕ: Сохраняем connection_string в БД (ВАЖНО!)
         await save_connection_string(telegram_id, connection_string)
+        logger.info(f"✅ Connection_string сохранен в БД для {telegram_id}")
 
         return {
             "success": True,
@@ -253,7 +272,7 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
             "lease_is_active": True,
             "qrcode_buffer": qrcode_buffer,
             "expiry_time": expiry_time,
-            "expiry_days": expiry_days,  # 🔴 ИСПРАВЛЕНИЕ: Правильные дни для нового клиента
+            "expiry_days": expiry_days,
             "connection_string": connection_string
         }
 

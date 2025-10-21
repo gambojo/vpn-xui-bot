@@ -94,6 +94,51 @@ class ActionService:
                 "message": "❌ Ошибка при создании VPN сервиса"
             }
 
+    async def handle_renew_vpn(self, telegram_id: int) -> Dict:
+        """
+        📍 ТОЧКА ВХОДА: Продление VPN услуги - ДОБАВЛЕННЫЙ МЕТОД
+        """
+        try:
+            # Если оплата включена - возвращаем информацию для оплаты
+            if is_payment_enabled():
+                return {
+                    "type": "payment_required",
+                    "message": "💳 Выберите способ оплаты для продления VPN",
+                    "providers": get_available_providers()
+                }
+
+            # Если оплата отключена - сразу продлеваем VPN
+            result = await renew_vpn_account(telegram_id)
+            if result and result.get("success"):
+                # Начисляем баллы за продление
+                await update_user_balance(telegram_id, 3)
+
+                return {
+                    "type": "success",
+                    "message": (
+                        f"✅ <b>VPN продлен!</b>\n"
+                        f"• Новый срок: {EXPIRY_TIME} дней\n"
+                        f"• ID: {telegram_id}\n"
+                        f"• Подключение: <code>{result['connection_string']}</code>"
+                    ),
+                    "qrcode_buffer": result.get('qrcode_buffer')
+                }
+            else:
+                return {
+                    "type": "error",
+                    "message": (
+                        "❌ Не удалось продлить VPN.\n"
+                        "Сначала активируйте услугу через «Приобрести подписку»"
+                    )
+                }
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка продления VPN: {e}")
+            return {
+                "type": "error",
+                "message": "❌ Ошибка при продлении VPN"
+            }
+
 
     async def handle_free_trial(self, telegram_id: int, username: str = None) -> Dict:
         """
@@ -135,7 +180,9 @@ class ActionService:
             result = await create_vpn_account(telegram_id, is_trial=True)
 
             # 🔴 ИСПРАВЛЕНИЕ: Правильно проверяем результат
-            if result and result.get("success"):
+            logger.info(f"🔍 Результат создания trial VPN: {result}")
+
+            if result is not None and result.get("success"):
                 # Отмечаем trial как использованный
                 await mark_trial_used(telegram_id)
 
@@ -155,14 +202,19 @@ class ActionService:
                 }
             else:
                 # 🔴 ИСПРАВЛЕНИЕ: Более информативное сообщение об ошибке
+                error_detail = "Неизвестная ошибка"
+                if result is None:
+                    error_detail = "VPN сервер недоступен"
+                elif not result.get("success"):
+                    error_detail = result.get("error", "Ошибка создания VPN")
+
+                logger.error(f"❌ Ошибка создания trial: {error_detail}")
                 return {
                     "type": "error",
                     "message": (
-                        "❌ Не удалось активировать бесплатный период.\n"
-                        "Возможные причины:\n"
-                        "• Проблемы с VPN сервером\n"
-                        "• Превышено количество подключений\n"
-                        "• Попробуйте позже или обратитесь в поддержку"
+                        f"❌ Не удалось активировать бесплатный период.\n"
+                        f"Причина: {error_detail}\n\n"
+                        f"Попробуйте позже или обратитесь в поддержку"
                     )
                 }
 

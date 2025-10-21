@@ -261,15 +261,11 @@ async def handle_confirmation(message: Message, state: FSMContext):
 @router.message(F.text == "🔄 Продлить подписку")
 async def handle_renew(message: Message, state: FSMContext):
     """
-    📍 ТОЧКА ВХОДА: Кнопка "🔄 Продлить подписку"
-    ЗАПУСК: Нажатие кнопки продления подписки
-    РЕЗУЛЬТАТ:
-      - Если оплата включена: выбор способа оплаты
-      - Если оплата отключена: сразу продление VPN
+    📍 ТОЧКА ВХОДА: Кнопка "🔄 Продлить подписку" - ИСПРАВЛЕННАЯ ВЕРСИЯ
     """
     telegram_id = message.from_user.id
 
-    # ВСЯ логика в ActionService
+    # 🔴 ИСПРАВЛЕНИЕ: Используем правильное имя метода
     result = await action_service.handle_renew_vpn(telegram_id)
 
     if result["type"] == "payment_required":
@@ -278,6 +274,9 @@ async def handle_renew(message: Message, state: FSMContext):
         await state.update_data(action="renew_vpn")
     else:
         await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
+        if result.get("qrcode_buffer"):
+            photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+            await message.answer_photo(photo, caption="📱 QR-код для подключения")
 
 
 # =============================================
