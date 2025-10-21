@@ -25,6 +25,8 @@ services:
   bot:
     build: .
     container_name: vpn_bot
+#    env_file:
+#      - .env
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       # База данных
