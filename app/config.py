@@ -5,8 +5,8 @@ load_dotenv()
 
 # === НАСТРОЙКИ БАЗЫ ДАННЫХ ===
 DB_NAME = os.getenv("DB_NAME", "xui_bot_db")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "password")
+DB_USER = os.getenv("DB_USER", "xui_bot_user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "xui_bot_password")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
@@ -15,8 +15,8 @@ XUI_PANEL_URL = os.getenv('XUI_PANEL_URL')
 XUI_USERNAME = os.getenv('XUI_USERNAME')
 XUI_PASSWORD = os.getenv('XUI_PASSWORD')
 INBOUND_ID = int(os.getenv('INBOUND_ID', '1'))
-DATA_LIMIT_GB = int(os.getenv('DATA_LIMIT_GB', '10'))  # Берем 10 из нового
-EXPIRY_TIME = int(os.getenv('EXPIRY_TIME', '30'))      # Берем 30 из нового
+DATA_LIMIT_GB = int(os.getenv('DATA_LIMIT_GB', '0'))
+EXPIRY_TIME = int(os.getenv('EXPIRY_TIME', '30'))
 XUI_EXTERNAL_IP = os.getenv('XUI_EXTERNAL_IP')
 SERVER_PORT = os.getenv('SERVER_PORT', '443')
 QRCODE_DIR = os.getenv('QRCODE_DIR', 'qrcodes')

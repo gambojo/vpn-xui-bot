@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from handlers.handlers import router  # ⚠️ ИСПРАВЛЕНО
+from handlers.handlers import router
 from config import BOT_TOKEN
 from services.database import init_database
 from handlers.keyboards import setup_menu_button
