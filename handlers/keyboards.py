@@ -53,6 +53,17 @@ def get_profile_menu():
         resize_keyboard=True
     )
 
+
+def get_confirmation_keyboard():
+    """Клавиатура для подтверждения перезаписи подписки"""
+    keyboard = [
+        [KeyboardButton(text="✅ Да, продолжить")],
+        [KeyboardButton(text="❌ Нет, отменить")],
+        [KeyboardButton(text="⬅️ Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+
+
 def get_subs_menu():
     """
     📍 ТОЧКА ВХОДА: Управление подписками /subs

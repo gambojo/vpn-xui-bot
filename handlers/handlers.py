@@ -8,7 +8,7 @@ from services.registration_service import registration_manager, RegistrationStat
 from handlers.action_service import action_service
 from handlers.keyboards import (
     get_main_menu, get_profile_menu, get_subs_menu, get_instructions_menu,
-    get_payment_methods, get_back_only, get_payment_check
+    get_payment_methods, get_back_only, get_payment_check, get_confirmation_keyboard
 )
 from config import (
     WELCOME_MESSAGE, ABOUT_MESSAGE, INSTRUCTIONS_MESSAGE, PROFILE_MESSAGE, SUBS_MESSAGE,
@@ -105,35 +105,6 @@ async def handle_main_menu(message: Message, state: FSMContext):
     await message.answer("🏠 Главное меню:", reply_markup=get_main_menu())
 
 
-@router.message(F.text == "🚀 Приобрести подписку на VPN")
-async def handle_get_vpn(message: Message, state: FSMContext):
-    """
-    📍 ТОЧКА ВХОДА: Кнопка "🚀 Приобрести подписку на VPN"
-    ЗАПУСК: Нажатие кнопки получения VPN
-    РЕЗУЛЬТАТ:
-      - Если оплата включена: выбор способа оплаты
-      - Если оплата отключена: сразу создание VPN
-    """
-    telegram_id = message.from_user.id
-    username = message.from_user.username
-
-    # ВСЯ логика в ActionService
-    result = await action_service.handle_get_vpn(telegram_id, username)
-
-    if result["type"] == "payment_required":
-        await message.answer(result["message"], reply_markup=get_payment_methods())
-        await state.set_state("waiting_for_payment_method")
-        await state.update_data(action="create_vpn")
-    else:
-        await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
-
-        # Отправляем QR-код если есть (из памяти)
-        if result.get("qrcode_buffer"):
-            # Создаем InputFile из BytesIO
-            photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
-            await message.answer_photo(photo, caption="📱 QR-код для подключения")
-
-
 @router.message(F.text == "🎁 Воспользоваться бесплатным периодом")
 async def handle_free_period(message: Message):
     """
@@ -156,12 +127,11 @@ async def handle_free_period(message: Message):
         await message.answer_photo(photo, caption="📱 QR-код для подключения")
 
 
-@router.message(F.text == "🛒 Получить подписку")
-async def handle_get_subscription(message: Message, state: FSMContext):
+@router.message(F.text == "🚀 Приобрести подписку на VPN")
+@router.message(F.text == "🛒 Получить подписку")  # 🔴 ОБЪЕДИНЯЕМ ОБРАБОТЧИКИ
+async def handle_get_vpn_unified(message: Message, state: FSMContext):
     """
-    📍 ТОЧКА ВХОДА: Кнопка "🛒 Получить подписку"
-    ЗАПУСК: Нажатие кнопки получения подписки
-    РЕЗУЛЬТАТ: Создание VPN подписки
+    📍 ТОЧКА ВХОДА: Унифицированный обработчик получения VPN
     """
     telegram_id = message.from_user.id
     username = message.from_user.username
@@ -169,17 +139,54 @@ async def handle_get_subscription(message: Message, state: FSMContext):
     # ВСЯ логика в ActionService
     result = await action_service.handle_get_vpn(telegram_id, username)
 
-    if result["type"] == "payment_required":
+    if result["type"] == "confirmation_required":
+        # 🔴 ДОБАВЛЯЕМ: Запрашиваем подтверждение
+        await message.answer(result["message"], reply_markup=get_confirmation_keyboard(), parse_mode="HTML")
+        await state.set_state("waiting_for_confirmation")
+    elif result["type"] == "payment_required":
         await message.answer(result["message"], reply_markup=get_payment_methods())
         await state.set_state("waiting_for_payment_method")
         await state.update_data(action="create_vpn")
     else:
         await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
-
-        # Отправляем QR-код если есть (из памяти)
         if result.get("qrcode_buffer"):
             photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
             await message.answer_photo(photo, caption="📱 QR-код для подключения")
+
+
+@router.message(F.state == "waiting_for_confirmation")
+async def handle_confirmation(message: Message, state: FSMContext):
+    """
+    📍 ТОЧКА ВХОДА: Подтверждение перезаписи подписки
+    """
+    if message.text == "✅ Да, продолжить":
+        # Получаем данные из состояния
+        data = await state.get_data()
+        telegram_id = message.from_user.id
+        username = message.from_user.username
+
+        # Создаем новую подписку (перезаписываем старую)
+        result = await action_service.handle_get_vpn(telegram_id, username)
+
+        if result["type"] == "payment_required":
+            await message.answer(result["message"], reply_markup=get_payment_methods())
+            await state.set_state("waiting_for_payment_method")
+            await state.update_data(action="create_vpn")
+        else:
+            await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
+            if result.get("qrcode_buffer"):
+                photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+                await message.answer_photo(photo, caption="📱 QR-код для подключения")
+            await state.clear()
+
+    elif message.text == "❌ Нет, отменить":
+        await message.answer("❌ Создание новой подписки отменено.", reply_markup=get_main_menu())
+        await state.clear()
+    elif message.text == "⬅️ Назад":
+        await message.answer("🏠 Главное меню:", reply_markup=get_main_menu())
+        await state.clear()
+    else:
+        await message.answer("❌ Пожалуйста, выберите вариант из клавиатуры:")
 
 
 @router.message(F.text == "📱 Получить подключение")
@@ -214,6 +221,41 @@ async def handle_status(message: Message):
     # ВСЯ логика в ActionService
     result = await action_service.handle_vpn_status(telegram_id)
     await message.answer(result["message"], reply_markup=get_subs_menu(), parse_mode="HTML")
+
+
+@router.message(F.state == "waiting_for_confirmation")
+async def handle_confirmation(message: Message, state: FSMContext):
+    """
+    📍 ТОЧКА ВХОДА: Подтверждение перезаписи подписки
+    """
+    if message.text == "✅ Да, продолжить":
+        # Получаем данные из состояния
+        data = await state.get_data()
+        telegram_id = message.from_user.id
+        username = message.from_user.username
+
+        # Создаем новую подписку (перезаписываем старую)
+        result = await action_service.handle_get_vpn(telegram_id, username)
+
+        if result["type"] == "payment_required":
+            await message.answer(result["message"], reply_markup=get_payment_methods())
+            await state.set_state("waiting_for_payment_method")
+            await state.update_data(action="create_vpn")
+        else:
+            await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
+            if result.get("qrcode_buffer"):
+                photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+                await message.answer_photo(photo, caption="📱 QR-код для подключения")
+            await state.clear()
+
+    elif message.text == "❌ Нет, отменить":
+        await message.answer("❌ Создание новой подписки отменено.", reply_markup=get_main_menu())
+        await state.clear()
+    elif message.text == "⬅️ Назад":
+        await message.answer("🏠 Главное меню:", reply_markup=get_main_menu())
+        await state.clear()
+    else:
+        await message.answer("❌ Пожалуйста, выберите вариант из клавиатуры:")
 
 
 @router.message(F.text == "🔄 Продлить подписку")

@@ -184,7 +184,7 @@ async def update_client(api, email, expiry_time, total_gb):
 
 # ⭐⭐ ТОЧКИ ВХОДА ⭐⭐
 async def create_vpn_account(telegram_id: int, is_trial: bool = False):
-    """ТОЧКА ВХОДА - создать VPN аккаунт"""
+    """ТОЧКА ВХОДА - создать VPN аккаунт - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         email = str(telegram_id)
 
@@ -215,6 +215,9 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
         if existing_client and client_in_inbound:
             logger.info(f"⚠️ Клиент {email} уже существует - возвращаем данные подключения")
 
+            # 🔴 ИСПРАВЛЕНИЕ: Правильно рассчитываем оставшиеся дни для существующего клиента
+            existing_expiry_days = get_expiry_date(existing_client.expiry_time)
+
             # Генерируем connection_string для существующего клиента
             connection_string = get_connection_string(email, inbound, client_in_inbound.id)
             qrcode_buffer = create_qrcode(connection_string, email)
@@ -227,8 +230,8 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
                 "client_id": client_in_inbound.id,
                 "lease_is_active": True,
                 "qrcode_buffer": qrcode_buffer,
-                "expiry_time": expiry_time,
-                "expiry_days": expiry_days,
+                "expiry_time": existing_client.expiry_time,  # Используем существующее время
+                "expiry_days": existing_expiry_days,  # 🔴 ИСПРАВЛЕНИЕ: Правильные дни
                 "connection_string": connection_string
             }
 
@@ -250,13 +253,14 @@ async def create_vpn_account(telegram_id: int, is_trial: bool = False):
             "lease_is_active": True,
             "qrcode_buffer": qrcode_buffer,
             "expiry_time": expiry_time,
-            "expiry_days": expiry_days,
+            "expiry_days": expiry_days,  # 🔴 ИСПРАВЛЕНИЕ: Правильные дни для нового клиента
             "connection_string": connection_string
         }
 
     except Exception as e:
         logger.error(f"❌ Ошибка создания VPN аккаунта: {e}")
         return None
+
 
 async def get_vpn_status(telegram_id: int):
     """ТОЧКА ВХОДА - получить статус VPN"""
