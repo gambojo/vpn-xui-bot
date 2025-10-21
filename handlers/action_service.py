@@ -102,7 +102,7 @@ class ActionService:
                         f"• ID: {telegram_id}\n"
                         f"• Подключение: <code>{result['connection_string']}</code>"
                     ),
-                    "qrcode_path": result.get('qrcode_path')
+                    "qrcode_buffer": result.get('qrcode_buffer')
                 }
             else:
                 return {
@@ -110,13 +110,13 @@ class ActionService:
                     "message": "❌ Не удалось создать VPN. Возможно, он уже существует."
                 }
 
+
         except Exception as e:
             logger.error(f"❌ Ошибка создания VPN: {e}")
             return {
                 "type": "error",
                 "message": "❌ Ошибка при создании VPN сервиса"
             }
-
 
     async def handle_free_trial(self, telegram_id: int, username: str = None) -> Dict:
         """
@@ -141,20 +141,6 @@ class ActionService:
                     "message": (
                         "❌ Вы уже использовали бесплатный период\n"
                         "💳 Для продолжения использования приобретите подписку"
-                    )
-                }
-
-            # Проверяем существование подписки
-            existing_vpn = await get_vpn_status(telegram_id)
-            if existing_vpn and existing_vpn.get("success"):
-                return {
-                    "type": "success",
-                    "message": (
-                        f"✅ <b>VPN уже активирован!</b>\n"
-                        f"• Состояние: ✅ Активна\n"
-                        f"• Осталось дней: {existing_vpn['expiry_days']}\n"
-                        f"• ID: {telegram_id}\n"
-                        f"• Для получения данных подключения используйте «📱 Получить подключение»"
                     )
                 }
 
@@ -194,7 +180,7 @@ class ActionService:
             else:
                 return {
                     "type": "error",
-                    "message": "❌ Не удалось активировать бесплатный период"
+                    "message": "❌ Не удалось активировать бесплатный период. Возможно, VPN уже активирован."
                 }
 
         except Exception as e:
@@ -294,6 +280,8 @@ class ActionService:
         try:
             # Проверяем существование VPN
             existing_vpn = await get_vpn_status(telegram_id)
+            logger.info(f"🔍 Проверка VPN статуса для {telegram_id}: {existing_vpn}")
+
             if not existing_vpn or not existing_vpn.get("success"):
                 return {
                     "type": "error",
@@ -305,6 +293,8 @@ class ActionService:
 
             # Получаем connection_string из БД
             connection_string = await get_connection_string(telegram_id)
+            logger.info(f"🔍 Получен connection_string из БД: {connection_string is not None}")
+
             if not connection_string:
                 return {
                     "type": "error",

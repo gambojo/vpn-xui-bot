@@ -156,6 +156,32 @@ async def handle_free_period(message: Message):
         await message.answer_photo(photo, caption="📱 QR-код для подключения")
 
 
+@router.message(F.text == "🛒 Получить подписку")
+async def handle_get_subscription(message: Message, state: FSMContext):
+    """
+    📍 ТОЧКА ВХОДА: Кнопка "🛒 Получить подписку"
+    ЗАПУСК: Нажатие кнопки получения подписки
+    РЕЗУЛЬТАТ: Создание VPN подписки
+    """
+    telegram_id = message.from_user.id
+    username = message.from_user.username
+
+    # ВСЯ логика в ActionService
+    result = await action_service.handle_get_vpn(telegram_id, username)
+
+    if result["type"] == "payment_required":
+        await message.answer(result["message"], reply_markup=get_payment_methods())
+        await state.set_state("waiting_for_payment_method")
+        await state.update_data(action="create_vpn")
+    else:
+        await message.answer(result["message"], reply_markup=get_main_menu(), parse_mode="HTML")
+
+        # Отправляем QR-код если есть (из памяти)
+        if result.get("qrcode_buffer"):
+            photo = BufferedInputFile(result["qrcode_buffer"].getvalue(), filename="qrcode.png")
+            await message.answer_photo(photo, caption="📱 QR-код для подключения")
+
+
 @router.message(F.text == "📱 Получить подключение")
 async def handle_get_connection(message: Message):
     """
