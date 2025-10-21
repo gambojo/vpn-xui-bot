@@ -6,13 +6,13 @@ from aiogram.types import Message, FSInputFile
 import logging
 import os
 
-from app.services import registration_manager
-from app.handlers.action_service import action_service  # ⚠️ ИСПРАВЛЕНО
-from app.handlers.keyboards import (  # ⚠️ ИСПРАВЛЕНО
+from services import registration_manager
+from handlers.action_service import action_service  # ⚠️ ИСПРАВЛЕНО
+from handlers.keyboards import (  # ⚠️ ИСПРАВЛЕНО
     get_main_menu, get_profile_menu, get_subs_menu, get_instructions_menu,
     get_payment_methods, get_back_only, get_payment_check
 )
-from app.config import (
+from config import (
     WELCOME_MESSAGE, ABOUT_MESSAGE, INSTRUCTIONS_MESSAGE, SUBS_MESSAGE,
     COLLECT_EMAIL, COLLECT_PHONE, COLLECT_FIRST_NAME, COLLECT_LAST_NAME, COLLECT_PATRONYMIC
 )
